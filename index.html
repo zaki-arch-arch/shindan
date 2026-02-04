@@ -1,0 +1,624 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Sparkles, Heart, Zap, Anchor, ArrowRight, RefreshCcw, BookOpen, Star, Smile, Target, ChevronRight, Check, List, Award, TrendingUp, AlertTriangle, Bot, MessageSquare } from 'lucide-react';
+import ReactMarkdown from 'react-markdown'; // Markdown表示用（なければ単純表示に切り替え）
+
+// --- データ定義 ---
+
+// 1. タイプ定義 (Archetypes)
+const ARCHETYPES = {
+  creator: {
+    id: 'creator',
+    name: "クリエイター（創造者）",
+    desc: "「0から1」を生み出すことに魂が震えるタイプ。既存の枠組みに囚われず、自分の感性やアイデアを形にすることに最大の喜びを感じます。",
+    strengths: ["独創的な発想力", "美意識・センス", "没頭する集中力", "変化への適応力"],
+    weaknesses: ["単純作業の繰り返し", "過度なルール・束縛", "興味のないことへの無関心"],
+    suitable_jobs: ["企画・マーケティング", "デザイン・エンジニアリング", "事業開発", "ライター・編集"],
+    advice: "「何を作るか」と同じくらい「どんな環境で作るか」が重要です。裁量権があり、成果物で評価される場所を選びましょう。"
+  },
+  supporter: {
+    id: 'supporter',
+    name: "サポーター（支援者）",
+    desc: "「誰かのため」が原動力になるタイプ。組織の潤滑油となり、人々の成長や幸福を支えることに深いやりがいを感じます。",
+    strengths: ["高い共感力", "調整・交渉力", "育成・コーチング力", "リスク管理能力"],
+    weaknesses: ["殺伐とした競争環境", "人間関係の対立", "感謝が感じられない仕事"],
+    suitable_jobs: ["人事・採用・労務", "カスタマーサクセス", "コンサルタント", "医療・福祉・教育"],
+    advice: "あなたの強みは「対人関係資産」を築く力です。数字だけでなく、顧客や社員の満足度を重視する企業文化がマッチします。"
+  },
+  analyst: {
+    id: 'analyst',
+    name: "アナリスト（探究者）",
+    desc: "「なぜ？」を突き詰め、解を見つけるタイプ。感情よりも論理やデータを重視し、複雑な問題を構造化して解決することに快感を覚えます。",
+    strengths: ["論理的思考力", "データ分析力", "客観的な視点", "専門知識の習得"],
+    weaknesses: ["根性論や感情的な指示", "非効率なプロセス", "頻繁な割り込み作業"],
+    suitable_jobs: ["データサイエンティスト", "エンジニア", "金融専門職", "経営企画・戦略"],
+    advice: "「専門性」が武器になります。ジェネラリストよりも、特定の領域を深掘りできるスペシャリストの道が、キャリアの安定と高年収に繋がります。"
+  },
+  leader: {
+    id: 'leader',
+    name: "リーダー（変革者）",
+    desc: "「目標達成」に向けて人々を導くタイプ。困難な壁が高いほど燃え上がり、責任ある立場で大きな決断を下すことに充実感を感じます。",
+    strengths: ["意思決定力", "推進・実行力", "ビジョンを語る力", "逆境への強さ"],
+    weaknesses: ["裁量権のない仕事", "年功序列で遅いスピード感", "現状維持の文化"],
+    suitable_jobs: ["プロジェクトマネージャー", "経営幹部候補", "起業家", "セールスマネージャー"],
+    advice: "「結果」を出せる環境に身を置きましょう。ベンチャーや外資系など、実力主義のフィールドでこそ、あなたの真価が発揮されます。"
+  }
+};
+
+// 2. 質問データ
+
+// Phase 1: 基礎診断 (全タイプ共通) - 10問
+const QUESTIONS_PHASE_1 = [
+  { id: 'p1_1', text: "休日に予定が急にキャンセルになりました。ぽっかり空いた時間、あなたなら何をしますか？", options: [
+    { label: "気になっていた新しいお店や場所に行ってみる", type: 'creator', score: 3 },
+    { label: "友人に連絡したり、誰かと会う約束を取り付ける", type: 'supporter', score: 3 },
+    { label: "溜まっていた本を読んだり、知識のインプットをする", type: 'analyst', score: 3 },
+    { label: "今後の計画を立て直したり、ジムで体を鍛える", type: 'leader', score: 3 },
+  ]},
+  { id: 'p1_2', text: "チームでプロジェクトを進める時、あなたが自然と引き受けてしまう役割は？", options: [
+    { label: "斬新なアイデア出しや、企画の方向性を決める", type: 'creator', score: 3 },
+    { label: "メンバーの意見を聞き、雰囲気を良くする", type: 'supporter', score: 3 },
+    { label: "進捗管理や、リスクがないかチェックする", type: 'analyst', score: 3 },
+    { label: "最終決定を下し、責任を持って皆を引っ張る", type: 'leader', score: 3 },
+  ]},
+  { id: 'p1_3', text: "あなたが仕事で「一番ストレスだ」と感じる瞬間は？", options: [
+    { label: "前例踏襲ばかりで、新しいことができない時", type: 'creator', score: 3 },
+    { label: "ギスギスした雰囲気で、誰も協力し合わない時", type: 'supporter', score: 3 },
+    { label: "根拠のない指示で、非効率な作業をさせられる時", type: 'analyst', score: 3 },
+    { label: "自分の裁量で決められず、承認待ちばかりの時", type: 'leader', score: 3 },
+  ]},
+  { id: 'p1_4', text: "子供の頃、夢中になっていた遊びは？", options: [
+    { label: "絵を描く、工作、ブロック作り", type: 'creator', score: 3 },
+    { label: "ごっこ遊び、秘密基地での会話", type: 'supporter', score: 3 },
+    { label: "図鑑を読む、パズル、観察日記", type: 'analyst', score: 3 },
+    { label: "ガキ大将的な遊び、競争、探検", type: 'leader', score: 3 },
+  ]},
+  { id: 'p1_5', text: "友人から相談を受けた時、どう対応することが多い？", options: [
+    { label: "「こんな解決策はどう？」と新しい視点を提案する", type: 'creator', score: 2 },
+    { label: "まずはじっくり話を聞き、共感してあげる", type: 'supporter', score: 3 },
+    { label: "状況を整理し、何が問題かを分析してあげる", type: 'analyst', score: 3 },
+    { label: "「こうすべきだ」と背中を押してあげる", type: 'leader', score: 2 },
+  ]},
+  { id: 'p1_6', text: "映画やドラマを見る時、どこに注目してしまう？", options: [
+    { label: "映像美、演出、独自の世界観", type: 'creator', score: 3 },
+    { label: "登場人物の心情や人間関係の変化", type: 'supporter', score: 3 },
+    { label: "伏線回収やストーリーの論理的な構成", type: 'analyst', score: 3 },
+    { label: "主人公の決断や、困難を乗り越える姿", type: 'leader', score: 3 },
+  ]},
+  { id: 'p1_7', text: "「成功した」と感じるのはどんな時？", options: [
+    { label: "自分にしかできない表現ができた時", type: 'creator', score: 3 },
+    { label: "関わった人が笑顔になり、感謝された時", type: 'supporter', score: 3 },
+    { label: "難解な課題の「正解」を導き出せた時", type: 'analyst', score: 3 },
+    { label: "目標数値を達成し、称賛された時", type: 'leader', score: 3 },
+  ]},
+  { id: 'p1_8', text: "これだけは譲れない、あなたの価値観は？", options: [
+    { label: "自由・オリジナリティ", type: 'creator', score: 3 },
+    { label: "誠実・調和", type: 'supporter', score: 3 },
+    { label: "真理・正確性", type: 'analyst', score: 3 },
+    { label: "達成・影響力", type: 'leader', score: 3 },
+  ]},
+  { id: 'p1_9', text: "もし明日から1ヶ月休みが取れたら？", options: [
+    { label: "創作活動や趣味に没頭する", type: 'creator', score: 3 },
+    { label: "ボランティアや家族サービスをする", type: 'supporter', score: 3 },
+    { label: "資格の勉強や専門書を読み漁る", type: 'analyst', score: 3 },
+    { label: "起業の準備や、大きな旅行計画を実行する", type: 'leader', score: 3 },
+  ]},
+  { id: 'p1_10', text: "他人からよく言われる褒め言葉は？", options: [
+    { label: "「センスがいいね」「面白い発想だね」", type: 'creator', score: 3 },
+    { label: "「話しやすいね」「優しいね」", type: 'supporter', score: 3 },
+    { label: "「詳しいね」「頭の回転が速いね」", type: 'analyst', score: 3 },
+    { label: "「頼りになるね」「決断力があるね」", type: 'leader', score: 3 },
+  ]},
+];
+
+// Phase 2: タイプ別深掘り質問 (Phase 1の結果で分岐)
+const QUESTIONS_PHASE_2 = {
+  creator: [
+    { text: "アイデアが行き詰まった時、どうやって打開しますか？", options: [{ label: "全く違う分野からヒントを探す", skill: "横断的思考力" }, { label: "手を動かしながら考える", skill: "プロトタイピング力" }, { label: "一度寝かせて無意識に任せる", skill: "直感力" }] },
+    { text: "あなたのクリエイティビティが最も発揮されるのは？", options: [{ label: "0から1を生み出す企画段階", skill: "0→1力" }, { label: "1を10にする改善・ブラッシュアップ", skill: "改善提案力" }, { label: "異なるものを組み合わせる時", skill: "編集力" }] },
+    { text: "こだわりすぎて納期が危ない時、どうしますか？", options: [{ label: "品質を優先し、納期交渉をする", skill: "品質追求力" }, { label: "要件を見直し、最低限でリリースする", skill: "柔軟性" }, { label: "超集中モードでなんとか間に合わせる", skill: "瞬発力" }] },
+    { text: "好きな「作業」はどれですか？", options: [{ label: "文章を書く・言葉を選ぶ", skill: "ライティング" }, { label: "色や配置を考える", skill: "デザイン思考" }, { label: "仕組みやロジックを組む", skill: "構築力" }] },
+    { text: "ルーティンワーク（単純作業）への耐性は？", options: [{ label: "苦痛で仕方がない", skill: "新規性志向" }, { label: "工夫して効率化するなら楽しめる", skill: "業務ハック力" }, { label: "無心になれるので意外と嫌いじゃない", skill: "集中持続力" }] },
+  ],
+  supporter: [
+    { text: "チーム内で意見が対立しました。どう動きますか？", options: [{ label: "双方の話を個別に聞きに行く", skill: "傾聴・調整力" }, { label: "共通のゴールを再確認させる", skill: "ファシリテーション" }, { label: "折衷案を提示する", skill: "問題解決力" }] },
+    { text: "「誰かの役に立った」と一番感じるのはどんな時？", options: [{ label: "「ありがとう」と言われた時", skill: "ホスピタリティ" }, { label: "その人が成長した姿を見た時", skill: "育成力" }, { label: "トラブルを未然に防げた時", skill: "リスク管理" }] },
+    { text: "相手が何を求めているか、言葉にしなくてもわかりますか？", options: [{ label: "表情や声色で大体わかる", skill: "洞察力" }, { label: "背景や文脈から推測できる", skill: "文脈理解力" }, { label: "わからないので丁寧にヒアリングする", skill: "ヒアリング力" }] },
+    { text: "自分が目立つことと、黒子に徹すること、どちらが好き？", options: [{ label: "黒子として支えるのが好き", skill: "サーバントリーダーシップ" }, { label: "たまには評価されたい", skill: "健全な承認欲求" }, { label: "チームの手柄になるなら何でもいい", skill: "チーム志向" }] },
+    { text: "忙しそうな同僚がいます。どう声をかけますか？", options: [{ label: "「何か手伝おうか？」", skill: "積極的支援" }, { label: "お菓子を差し入れる", skill: "気配り" }, { label: "あえてそっとしておく", skill: "状況判断力" }] },
+  ],
+  analyst: [
+    { text: "不明確な課題に直面しました。まず何をしますか？", options: [{ label: "データを集めて現状を可視化する", skill: "データ分析力" }, { label: "要素分解してボトルネックを探す", skill: "構造化思考" }, { label: "詳しい人に話を聞きに行く", skill: "情報収集力" }] },
+    { text: "説明資料を作る時、最もこだわるのは？", options: [{ label: "論理の破綻がないこと", skill: "ロジカルシンキング" }, { label: "数字や根拠の正確さ", skill: "ファクトベース思考" }, { label: "誰が見てもわかるシンプルさ", skill: "要約力" }] },
+    { text: "新しいツールや技術を導入する際、どう判断しますか？", options: [{ label: "コスト対効果を計算する", skill: "ROI視点" }, { label: "仕様やスペックを徹底的に調べる", skill: "技術選定眼" }, { label: "とりあえず試して判断する", skill: "検証力" }] },
+    { text: "感情的な議論になった時、どう感じますか？", options: [{ label: "時間の無駄だと感じる", skill: "合理性追求" }, { label: "感情の裏にある原因を探る", skill: "心理分析" }, { label: "冷静に事実に引き戻そうとする", skill: "客観視点" }] },
+    { text: "「専門家」として頼られることについてどう思いますか？", options: [{ label: "誇らしい、もっと深めたい", skill: "探究心" }, { label: "プレッシャーだが悪くない", skill: "責任感" }, { label: "幅広く知っていたいので専門特化は迷う", skill: "知的好奇心" }] },
+  ],
+  leader: [
+    { text: "誰もやりたがらない困難なプロジェクト。どうしますか？", options: [{ label: "チャンスだと思い手を挙げる", skill: "チャレンジ精神" }, { label: "メリットがあるならやる", skill: "戦略的思考" }, { label: "誰かを指名して任せる", skill: "権限委譲" }] },
+    { text: "大きな決断をする時、何を重視しますか？", options: [{ label: "直感とビジョン", skill: "ビジョナリー思考" }, { label: "勝算（成功確率）", skill: "リスク計算" }, { label: "チームの総意", skill: "合意形成力" }] },
+    { text: "部下がミスをしました。どう対応しますか？", options: [{ label: "原因を分析し、再発防止策を考えさせる", skill: "問題解決支援" }, { label: "責任は自分が取り、挽回の機会を与える", skill: "責任感・包容力" }, { label: "厳しく指導する", skill: "規律維持" }] },
+    { text: "目標未達になりそうです。どう挽回しますか？", options: [{ label: "気合いを入れ直し、行動量を増やす", skill: "行動力" }, { label: "やり方を根本から変える", skill: "変革力" }, { label: "リソースを追加調達する", skill: "交渉力" }] },
+    { text: "将来、どうなりたいですか？", options: [{ label: "経営者や事業責任者", skill: "経営視点" }, { label: "業界の第一人者", skill: "ブランド構築力" }, { label: "自由な資産家", skill: "目標達成力" }] },
+  ],
+};
+
+// Phase 3: スキル発掘 (Can) - 全タイプ共通だが、経験を問う
+const QUESTIONS_PHASE_3 = [
+  { text: "人前でプレゼンや発表をすることは？", options: [{ label: "得意、むしろ好き", tag: "プレゼン力" }, { label: "準備すれば問題なくできる", tag: "説明力" }, { label: "できれば避けたい", tag: null }] },
+  { text: "Excelやスプレッドシートで関数を組んだり、データを加工するのは？", options: [{ label: "息をするようにできる", tag: "データ処理" }, { label: "調べながらならできる", tag: "ITリテラシー" }, { label: "苦手", tag: null }] },
+  { text: "初対面の人と打ち解けるのは？", options: [{ label: "すぐに仲良くなれる", tag: "関係構築力" }, { label: "仕事なら問題ない", tag: "ビジネスコミュ力" }, { label: "時間がかかる", tag: null }] },
+  { text: "文章を書くこと（メール、資料、ブログ等）は？", options: [{ label: "苦にならない、速い", tag: "ライティング" }, { label: "推敲すれば書ける", tag: "文書作成" }, { label: "書くより話したい", tag: null }] },
+  { text: "スケジュール管理やタスク管理は？", options: [{ label: "緻密に管理している", tag: "進捗管理" }, { label: "大枠は守れる", tag: "セルフマネジメント" }, { label: "よく抜け漏れる", tag: null }] },
+  { text: "飲み会の幹事や旅行の計画立ては？", options: [{ label: "よくやる、好き", tag: "企画・調整" }, { label: "頼まれればやる", tag: "実行力" }, { label: "任せたい", tag: null }] },
+  { text: "後輩や新人に教えることは？", options: [{ label: "わかりやすいと言われる", tag: "ティーチング" }, { label: "背中で見せるタイプ", tag: "モデリング" }, { label: "自分のことで精一杯", tag: null }] },
+  { text: "英語や外国語を使う機会は？", options: [{ label: "実務で使っている", tag: "語学力" }, { label: "読み書きならできる", tag: "情報収集(英語)" }, { label: "翻訳ツール頼み", tag: null }] },
+  { text: "トラブルが起きた時のメンタルは？", options: [{ label: "冷静に対処できる", tag: "ストレス耐性" }, { label: "焦るがなんとかする", tag: "柔軟性" }, { label: "パニックになる", tag: null }] },
+  { text: "新しいアプリやWebサービスは？", options: [{ label: "すぐに試す", tag: "デジタル感度" }, { label: "必要なら使う", tag: "学習意欲" }, { label: "慣れたものがいい", tag: null }] },
+];
+
+// --- API呼び出し関数 ---
+const apiKey = ""; // 実行環境によって提供されます
+
+const callGemini = async (prompt) => {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }],
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API call failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "申し訳ありません。AIからの応答を取得できませんでした。";
+  } catch (error) {
+    console.error("Gemini API Error:", error);
+    return "現在、AIサービスが混み合っているか、エラーが発生しています。しばらく経ってから再試行してください。";
+  }
+};
+
+// --- コンポーネント ---
+
+const App = () => {
+  const [screen, setScreen] = useState('welcome'); 
+  const [phase, setPhase] = useState(1);
+  const [qIndex, setQIndex] = useState(0);
+  
+  // スコア管理
+  const [scores, setScores] = useState({ creator: 0, supporter: 0, analyst: 0, leader: 0 });
+  const [determinedType, setDeterminedType] = useState(null); // Phase 1で決定
+  
+  // 回答履歴とスキルタグ
+  const [history, setHistory] = useState([]);
+  const [detectedSkills, setDetectedSkills] = useState([]);
+
+  // AI関連ステート
+  const [aiReport, setAiReport] = useState(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // --- ロジック ---
+
+  // 診断開始
+  const startDiagnosis = () => {
+    setScreen('question');
+    setPhase(1);
+    setQIndex(0);
+    setScores({ creator: 0, supporter: 0, analyst: 0, leader: 0 });
+    setHistory([]);
+    setDetectedSkills([]);
+    setDeterminedType(null);
+    setAiReport(null); // AIレポートリセット
+  };
+
+  // 回答ハンドラ
+  const handleAnswer = (option, questionText) => {
+    // 履歴記録
+    setHistory(prev => [...prev, { q: questionText, a: option.label }]);
+
+    if (phase === 1) {
+      // Phase 1: スコア加算
+      setScores(prev => ({ ...prev, [option.type]: prev[option.type] + option.score }));
+      
+      if (qIndex < QUESTIONS_PHASE_1.length - 1) {
+        setQIndex(prev => prev + 1);
+      } else {
+        // Phase 1 終了 -> タイプ決定 -> Phase 2へ
+        const sortedTypes = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+        // 簡易的に現状のscores + 今回のoptionを加味して判定
+        const finalScores = { ...scores, [option.type]: scores[option.type] + option.score };
+        const winner = Object.entries(finalScores).sort((a, b) => b[1] - a[1])[0][0];
+        
+        setDeterminedType(winner);
+        setPhase(2);
+        setQIndex(0);
+      }
+    } else if (phase === 2) {
+      // Phase 2: スキル抽出（オプションにskillがあれば）
+      if (option.skill) {
+        setDetectedSkills(prev => [...prev, option.skill]);
+      }
+
+      const p2Questions = QUESTIONS_PHASE_2[determinedType];
+      if (qIndex < p2Questions.length - 1) {
+        setQIndex(prev => prev + 1);
+      } else {
+        // Phase 2 終了 -> Phase 3へ
+        setPhase(3);
+        setQIndex(0);
+      }
+    } else if (phase === 3) {
+      // Phase 3: 実務スキル判定
+      if (option.tag) {
+        setDetectedSkills(prev => [...prev, option.tag]);
+      }
+
+      if (qIndex < QUESTIONS_PHASE_3.length - 1) {
+        setQIndex(prev => prev + 1);
+      } else {
+        // 全終了 -> 結果画面
+        setScreen('analyzing');
+        setTimeout(() => setScreen('result'), 2500);
+      }
+    }
+  };
+
+  // AIレポート生成
+  const generateAIReport = async () => {
+    setIsGenerating(true);
+    const typeData = ARCHETYPES[determinedType];
+    const uniqueSkills = [...new Set(detectedSkills)];
+    
+    const prompt = `
+      あなたはプロのキャリアコンサルタントです。
+      以下のユーザー診断結果に基づき、具体的かつ実践的なキャリア戦略レポートを作成してください。
+      口調はポジティブで、プロフェッショナルかつ親しみやすいトーンでお願いします。
+
+      【ユーザープロファイル】
+      - アーキタイプ: ${typeData.name} (${typeData.desc})
+      - 検出されたスキルタグ: ${uniqueSkills.join(', ') || "特になし"}
+      - 主な強み: ${typeData.strengths.join(', ')}
+      - 回答の傾向（一部）:
+        ${history.slice(0, 5).map(h => `Q: ${h.q} -> A: ${h.a}`).join('\n')}
+
+      【出力してほしい項目】
+      1. **✨ あなたの隠れた可能性**: アーキタイプとスキルを組み合わせた、ユーザー独自の市場価値についての分析。
+      2. **🚀 明日から始めるべきアクション3選**: 転職活動やスキルアップのために、今すぐできる具体的な行動。
+      3. **📝 職務経歴書用「自己PR」ドラフト**: 検出されたスキルを用いた、説得力のある自己PRの例文（200文字程度）。
+      4. **💼 おすすめの意外な職種**: 定番の職種以外で、このタイプが輝けるニッチな、あるいは意外性のある職種提案。
+
+      マークダウン形式で見やすく整形してください。
+    `;
+
+    const result = await callGemini(prompt);
+    setAiReport(result);
+    setIsGenerating(false);
+  };
+
+  // 現在の質問を取得
+  const getCurrentQuestion = () => {
+    if (phase === 1) return QUESTIONS_PHASE_1[qIndex];
+    if (phase === 2) return QUESTIONS_PHASE_2[determinedType][qIndex];
+    if (phase === 3) return QUESTIONS_PHASE_3[qIndex];
+    return null;
+  };
+
+  // 進捗率
+  const getProgress = () => {
+    const totalP1 = QUESTIONS_PHASE_1.length;
+    const totalP2 = determinedType ? QUESTIONS_PHASE_2[determinedType].length : 5;
+    const totalP3 = QUESTIONS_PHASE_3.length;
+    const total = totalP1 + totalP2 + totalP3;
+    
+    let current = qIndex;
+    if (phase > 1) current += totalP1;
+    if (phase > 2) current += totalP2;
+    
+    return Math.round((current / total) * 100);
+  };
+
+  // --- レンダリング ---
+
+  const renderWelcome = () => (
+    <div className="flex flex-col items-center justify-center text-center space-y-6 animate-fade-in py-10">
+      <div className="bg-indigo-600 p-5 rounded-3xl shadow-xl mb-4">
+        <Sparkles className="w-16 h-16 text-white" />
+      </div>
+      <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 tracking-tight">
+        Self-Discovery<br/><span className="text-indigo-600">Compass Pro</span>
+      </h1>
+      <div className="max-w-md text-gray-600 space-y-2 text-lg">
+        <p>あなたの「キャリアの原石」を掘り起こす<br/>AI搭載の本格的な自己分析ツールです。</p>
+        <p className="text-sm bg-gray-100 py-2 px-4 rounded-full inline-block mt-4">
+          ⏱ 所要時間: 約3分 / 全30〜40問
+        </p>
+      </div>
+      
+      <div className="grid gap-3 w-full max-w-sm mt-6 text-left text-sm text-gray-500 bg-white p-6 rounded-xl border border-gray-200">
+        <div className="flex items-center"><span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold mr-3">1</span> 基礎診断でタイプを特定</div>
+        <div className="flex items-center"><span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold mr-3">2</span> タイプ別の深掘り質問</div>
+        <div className="flex items-center"><span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold mr-3">3</span> 隠れた実務スキルの発掘</div>
+      </div>
+
+      <button
+        onClick={startDiagnosis}
+        className="mt-8 px-10 py-4 bg-indigo-600 text-white rounded-full font-bold text-xl shadow-lg hover:bg-indigo-700 hover:shadow-2xl transition-all transform hover:-translate-y-1 flex items-center"
+      >
+        分析を開始する <ArrowRight className="ml-2 w-6 h-6" />
+      </button>
+    </div>
+  );
+
+  const renderQuestion = () => {
+    const question = getCurrentQuestion();
+    const progress = getProgress();
+
+    return (
+      <div className="max-w-2xl mx-auto w-full animate-slide-up min-h-[400px] flex flex-col">
+        <div className="mb-6">
+          <div className="flex justify-between text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
+            <span>Phase {phase} / 3</span>
+            <span>{progress}% Completed</span>
+          </div>
+          <div className="w-full bg-gray-100 rounded-full h-2">
+            <div 
+              className="bg-indigo-600 h-2 rounded-full transition-all duration-500 ease-out" 
+              style={{ width: `${progress}%` }}
+            ></div>
+          </div>
+        </div>
+
+        <div className="flex-1">
+          <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-8 leading-relaxed">
+            <span className="text-indigo-500 text-lg block mb-2 font-medium">
+              Q. {phase === 1 ? "基本" : phase === 2 ? "深掘り" : "スキル"}
+            </span>
+            {question.text}
+          </h2>
+
+          <div className="space-y-3">
+            {question.options.map((option, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleAnswer(option, question.text)}
+                className="w-full text-left p-5 rounded-xl border border-gray-200 bg-white hover:bg-indigo-50 hover:border-indigo-400 transition-all shadow-sm hover:shadow-md group relative overflow-hidden"
+              >
+                <div className="flex items-center justify-between relative z-10">
+                  <span className="text-lg text-gray-700 group-hover:text-indigo-900 font-medium">{option.label}</span>
+                  <ChevronRight className="text-gray-300 group-hover:text-indigo-500" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderResult = () => {
+    const typeData = ARCHETYPES[determinedType];
+    // スキルの重複削除
+    const uniqueSkills = [...new Set(detectedSkills)];
+
+    return (
+      <div className="max-w-4xl mx-auto w-full animate-fade-in pb-20">
+        
+        {/* ヘッダー: タイプ結果 */}
+        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 mb-8">
+          <div className="bg-gradient-to-r from-indigo-900 to-purple-800 p-8 md:p-12 text-center text-white relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-full opacity-10">
+              <Sparkles className="w-full h-full" />
+            </div>
+            <p className="text-indigo-200 font-medium mb-4 tracking-widest uppercase">Analysis Complete</p>
+            <h2 className="text-3xl md:text-5xl font-extrabold mb-4">{typeData.name}</h2>
+            <p className="text-indigo-100 text-lg max-w-2xl mx-auto leading-relaxed opacity-90">
+              {typeData.desc}
+            </p>
+          </div>
+
+          <div className="p-8 md:p-10 grid md:grid-cols-2 gap-10">
+            {/* 強みと弱み */}
+            <div>
+              <h3 className="font-bold text-gray-800 text-xl mb-4 flex items-center">
+                <TrendingUp className="w-6 h-6 text-indigo-600 mr-2" />
+                あなたの武器（強み）
+              </h3>
+              <ul className="space-y-2 mb-8">
+                {typeData.strengths.map((s, i) => (
+                  <li key={i} className="flex items-start bg-indigo-50 p-3 rounded-lg text-indigo-900">
+                    <Check className="w-5 h-5 text-indigo-600 mr-2 flex-shrink-0" />
+                    {s}
+                  </li>
+                ))}
+              </ul>
+
+              <h3 className="font-bold text-gray-800 text-xl mb-4 flex items-center">
+                <AlertTriangle className="w-6 h-6 text-orange-500 mr-2" />
+                避けるべき環境（弱み）
+              </h3>
+              <ul className="space-y-2">
+                {typeData.weaknesses.map((w, i) => (
+                  <li key={i} className="flex items-start bg-orange-50 p-3 rounded-lg text-orange-900">
+                    <span className="w-5 h-5 text-orange-500 mr-2 flex-shrink-0">⚠</span>
+                    {w}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* 適職とアドバイス */}
+            <div>
+              <h3 className="font-bold text-gray-800 text-xl mb-4 flex items-center">
+                <Target className="w-6 h-6 text-blue-600 mr-2" />
+                輝けるフィールド（適職）
+              </h3>
+              <div className="flex flex-wrap gap-2 mb-8">
+                {typeData.suitable_jobs.map((job, i) => (
+                  <span key={i} className="px-4 py-2 bg-white border-2 border-blue-100 text-blue-800 rounded-full font-bold shadow-sm">
+                    {job}
+                  </span>
+                ))}
+              </div>
+
+              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                <h3 className="font-bold text-gray-800 mb-3 flex items-center">
+                  <Smile className="w-5 h-5 text-yellow-500 mr-2" />
+                  キャリアアドバイザーからの助言
+                </h3>
+                <p className="text-gray-700 leading-relaxed text-sm">
+                  {typeData.advice}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* スキルインベントリ */}
+        <div className="bg-white rounded-3xl shadow-lg p-8 border border-gray-100 mb-8">
+          <h3 className="font-bold text-gray-800 text-2xl mb-6 flex items-center border-b pb-4">
+            <Award className="w-8 h-8 text-yellow-500 mr-3" />
+            発掘された「Can（できること）」リスト
+          </h3>
+          <p className="text-gray-600 mb-6">
+            回答から分析された、あなたが既に持っている、あるいは素養があるスキルセットです。<br/>
+            職務経歴書の「自己PR」や「活かせる経験」の欄にそのまま使えます。
+          </p>
+          
+          {uniqueSkills.length > 0 ? (
+            <div className="flex flex-wrap gap-3">
+              {uniqueSkills.map((skill, i) => (
+                <div key={i} className="flex items-center px-5 py-3 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border border-gray-200 shadow-sm text-gray-800 font-bold">
+                  <Zap className="w-4 h-4 text-yellow-500 mr-2 fill-current" />
+                  {skill}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-400 italic">特筆すべきスキルタグは検出されませんでしたが、基礎能力は十分にあります。</p>
+          )}
+        </div>
+
+        {/* --- Gemini AI Integration Section --- */}
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-3xl shadow-lg p-1 border border-indigo-100 mb-8">
+          <div className="bg-white/80 backdrop-blur rounded-[20px] p-8">
+            <div className="flex flex-col md:flex-row items-center justify-between mb-6">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900 flex items-center">
+                  <Bot className="w-8 h-8 text-indigo-600 mr-3" />
+                  AIキャリア戦略レポート ✨
+                </h3>
+                <p className="text-gray-600 mt-2">
+                  あなたの診断結果とスキルをAIが詳細に分析し、<br className="hidden md:block"/>
+                  あなただけの「自己PR」や「明日からの行動」を提案します。
+                </p>
+              </div>
+              {!aiReport && !isGenerating && (
+                <button
+                  onClick={generateAIReport}
+                  className="mt-4 md:mt-0 flex items-center px-6 py-3 bg-indigo-600 text-white rounded-full font-bold shadow-md hover:bg-indigo-700 hover:shadow-lg transition-all transform hover:-translate-y-1"
+                >
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  レポートを生成する (Free)
+                </button>
+              )}
+            </div>
+
+            {isGenerating && (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Sparkles className="w-12 h-12 text-indigo-500 animate-spin mb-4" />
+                <p className="text-indigo-700 font-bold animate-pulse">AIがあなたの強みを分析中...</p>
+                <p className="text-sm text-indigo-400 mt-2">最高の自己PRを考えています</p>
+              </div>
+            )}
+
+            {aiReport && (
+              <div className="animate-fade-in bg-white rounded-xl border border-gray-200 p-6 md:p-8 shadow-inner">
+                <div className="prose prose-indigo max-w-none text-gray-800">
+                  <ReactMarkdown>{aiReport}</ReactMarkdown>
+                </div>
+                <div className="mt-6 pt-6 border-t border-gray-100 text-center">
+                  <p className="text-xs text-gray-400">※ AIによる生成結果です。内容を参考に、ご自身の言葉でブラッシュアップしてください。</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 回答ログ */}
+        <div className="mt-8 text-center pb-8">
+          <button
+            onClick={() => {
+              const text = history.map(h => `Q: ${h.q}\nA: ${h.a}`).join('\n\n');
+              navigator.clipboard.writeText(text);
+              alert('回答ログをクリップボードにコピーしました！');
+            }}
+            className="text-indigo-600 font-bold hover:underline mb-8"
+          >
+            回答ログをコピーする（メモ用）
+          </button>
+          
+          <div>
+            <button
+              onClick={startDiagnosis}
+              className="inline-flex items-center px-8 py-4 bg-gray-900 text-white rounded-full font-bold shadow-lg hover:bg-gray-800 transition-all"
+            >
+              <RefreshCcw className="w-5 h-5 mr-2" />
+              もう一度診断する
+            </button>
+          </div>
+        </div>
+
+      </div>
+    );
+  };
+
+  const renderAnalyzing = () => (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] animate-pulse">
+      <div className="relative">
+        <Sparkles className="w-20 h-20 text-indigo-300" />
+        <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
+          <RefreshCcw className="w-8 h-8 text-indigo-600 animate-spin" />
+        </div>
+      </div>
+      <h2 className="text-3xl font-bold text-gray-800 mt-8">多角的に分析中...</h2>
+      <p className="text-gray-500 mt-4 text-lg">あなたの回答から、最適なキャリアパスを描いています</p>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-900 selection:bg-indigo-100">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setScreen('welcome')}>
+            <div className="bg-indigo-600 p-1.5 rounded text-white">
+              <Heart size={18} fill="currentColor" />
+            </div>
+            <span className="font-bold text-lg tracking-tight text-gray-800">Self-Discovery Compass Pro</span>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 py-8 md:py-12">
+        {screen === 'welcome' && renderWelcome()}
+        {screen === 'question' && renderQuestion()}
+        {screen === 'analyzing' && renderAnalyzing()}
+        {screen === 'result' && renderResult()}
+      </main>
+
+      <style>{`
+        @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slide-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fade-in 0.6s ease-out forwards; }
+        .animate-slide-up { animation: slide-up 0.4s ease-out forwards; }
+      `}</style>
+    </div>
+  );
+};
+
+export default App;
