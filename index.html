@@ -183,49 +183,99 @@ const callGemini = async (prompt) => {
   }
 };
 
-// --- ヘルパー: シンプルなマークダウンレンダラー ---
-// 外部ライブラリを使わず、テキストを整形して表示します
+// --- ヘルパー: 改良版SimpleMarkdown ---
+// テキストを行ごとに解析し、見出し・リスト・太字をReact要素としてレンダリングする
 const SimpleMarkdown = ({ text }) => {
   if (!text) return null;
-  
-  // 段落ごとに分割
-  const sections = text.split('\n\n');
-  
-  return (
-    <div className="space-y-4 text-left">
-      {sections.map((section, i) => {
-        // 見出し (### または **)
-        if (section.trim().startsWith('### ') || (section.trim().startsWith('**') && section.trim().endsWith('**') && section.length < 50)) {
-          return <h3 key={i} className="text-xl font-bold text-indigo-800 mt-6 mb-2 border-b border-indigo-100 pb-2">{section.replace(/### |[*]/g, '')}</h3>;
-        }
-        
-        // リスト
-        if (section.includes('\n- ') || section.trim().startsWith('- ')) {
-           const items = section.split('\n').filter(line => line.trim().startsWith('- '));
-           return (
-             <ul key={i} className="list-disc pl-5 space-y-2 text-gray-700 bg-indigo-50/50 p-4 rounded-lg">
-               {items.map((item, j) => (
-                 <li key={j}>{item.replace('- ', '').replace(/\*\*/g, '')}</li>
-               ))}
-             </ul>
-           );
-        }
 
-        // 通常の段落（太字パース付き）
-        const parts = section.split(/(\*\*.*?\*\*)/g);
-        return (
-          <p key={i} className="text-gray-700 leading-relaxed">
-            {parts.map((part, j) => {
-              if (part.startsWith('**') && part.endsWith('**')) {
-                return <strong key={j} className="text-indigo-900 font-bold bg-yellow-100 px-1 rounded">{part.replace(/\*\*/g, '')}</strong>;
-              }
-              return part;
-            })}
-          </p>
+  // テキストを行で分割
+  const lines = text.split('\n');
+  const elements = [];
+  let listBuffer = [];
+
+  // 太字をパースしてReact要素の配列を返す関数
+  const parseBoldText = (str, keyPrefix) => {
+    const parts = str.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={`${keyPrefix}-bold-${index}`} className="text-indigo-900 bg-yellow-100 px-1 rounded">{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+  };
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+
+    // 1. リストアイテム (- または *) の場合
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      listBuffer.push(trimmed.substring(2));
+    } else {
+      // リストバッファがあれば、ここで<ul>として書き出し、バッファをクリア
+      if (listBuffer.length > 0) {
+        elements.push(
+          <ul key={`list-group-${index}`} className="list-disc pl-5 space-y-2 text-gray-700 bg-indigo-50/50 p-4 rounded-lg my-3 border border-indigo-100">
+            {listBuffer.map((item, i) => (
+              <li key={`li-${index}-${i}`}>
+                {parseBoldText(item, `li-${index}-${i}`)}
+              </li>
+            ))}
+          </ul>
         );
-      })}
-    </div>
-  );
+        listBuffer = [];
+      }
+
+      // 2. 空行
+      if (trimmed === '') {
+        // 余白を追加
+        elements.push(<div key={`spacer-${index}`} className="h-2" />);
+        return;
+      }
+
+      // 3. 見出し (###)
+      if (trimmed.startsWith('###')) {
+        elements.push(
+          <h3 key={`h3-${index}`} className="text-xl font-bold text-indigo-800 mt-6 mb-3 border-b-2 border-indigo-100 pb-1 flex items-center">
+            <span className="text-2xl mr-2 text-indigo-400">#</span>
+            {trimmed.replace(/^###\s*/, '')}
+          </h3>
+        );
+        return;
+      }
+      
+      // 4. 見出し (**) - 単独行で太字のみの場合は見出し扱いにする
+      if (trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length < 50 && !trimmed.includes(' ')) {
+         elements.push(
+          <h3 key={`h-bold-${index}`} className="text-lg font-bold text-indigo-800 mt-5 mb-2 pl-3 border-l-4 border-indigo-400 bg-gray-50 py-1">
+            {trimmed.replace(/\*\*/g, '')}
+          </h3>
+        );
+        return;
+      }
+
+      // 5. 通常の段落
+      elements.push(
+        <p key={`p-${index}`} className="text-gray-700 leading-relaxed my-1">
+           {parseBoldText(line, `p-${index}`)}
+        </p>
+      );
+    }
+  });
+
+  // ループ終了後に残っているリストがあれば書き出し
+  if (listBuffer.length > 0) {
+    elements.push(
+      <ul key={`list-group-end`} className="list-disc pl-5 space-y-2 text-gray-700 bg-indigo-50/50 p-4 rounded-lg my-3 border border-indigo-100">
+        {listBuffer.map((item, i) => (
+          <li key={`li-end-${i}`}>
+            {parseBoldText(item, `li-end-${i}`)}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return <div className="space-y-1 text-left">{elements}</div>;
 };
 
 // --- コンポーネント ---
