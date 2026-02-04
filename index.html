@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, Heart, Zap, Anchor, ArrowRight, RefreshCcw, BookOpen, Star, Smile, Target, ChevronRight, Check, List, Award, TrendingUp, AlertTriangle, Bot, MessageSquare } from 'lucide-react';
-import ReactMarkdown from 'react-markdown'; // Markdown表示用（なければ単純表示に切り替え）
 
 // --- データ定義 ---
 
@@ -184,6 +183,51 @@ const callGemini = async (prompt) => {
   }
 };
 
+// --- ヘルパー: シンプルなマークダウンレンダラー ---
+// 外部ライブラリを使わず、テキストを整形して表示します
+const SimpleMarkdown = ({ text }) => {
+  if (!text) return null;
+  
+  // 段落ごとに分割
+  const sections = text.split('\n\n');
+  
+  return (
+    <div className="space-y-4 text-left">
+      {sections.map((section, i) => {
+        // 見出し (### または **)
+        if (section.trim().startsWith('### ') || (section.trim().startsWith('**') && section.trim().endsWith('**') && section.length < 50)) {
+          return <h3 key={i} className="text-xl font-bold text-indigo-800 mt-6 mb-2 border-b border-indigo-100 pb-2">{section.replace(/### |[*]/g, '')}</h3>;
+        }
+        
+        // リスト
+        if (section.includes('\n- ') || section.trim().startsWith('- ')) {
+           const items = section.split('\n').filter(line => line.trim().startsWith('- '));
+           return (
+             <ul key={i} className="list-disc pl-5 space-y-2 text-gray-700 bg-indigo-50/50 p-4 rounded-lg">
+               {items.map((item, j) => (
+                 <li key={j}>{item.replace('- ', '').replace(/\*\*/g, '')}</li>
+               ))}
+             </ul>
+           );
+        }
+
+        // 通常の段落（太字パース付き）
+        const parts = section.split(/(\*\*.*?\*\*)/g);
+        return (
+          <p key={i} className="text-gray-700 leading-relaxed">
+            {parts.map((part, j) => {
+              if (part.startsWith('**') && part.endsWith('**')) {
+                return <strong key={j} className="text-indigo-900 font-bold bg-yellow-100 px-1 rounded">{part.replace(/\*\*/g, '')}</strong>;
+              }
+              return part;
+            })}
+          </p>
+        );
+      })}
+    </div>
+  );
+};
+
 // --- コンポーネント ---
 
 const App = () => {
@@ -293,7 +337,7 @@ const App = () => {
       3. **📝 職務経歴書用「自己PR」ドラフト**: 検出されたスキルを用いた、説得力のある自己PRの例文（200文字程度）。
       4. **💼 おすすめの意外な職種**: 定番の職種以外で、このタイプが輝けるニッチな、あるいは意外性のある職種提案。
 
-      マークダウン形式で見やすく整形してください。
+      出力はマークダウン形式で行ってください。見出しは###を使用してください。
     `;
 
     const result = await callGemini(prompt);
@@ -539,9 +583,9 @@ const App = () => {
 
             {aiReport && (
               <div className="animate-fade-in bg-white rounded-xl border border-gray-200 p-6 md:p-8 shadow-inner">
-                <div className="prose prose-indigo max-w-none text-gray-800">
-                  <ReactMarkdown>{aiReport}</ReactMarkdown>
-                </div>
+                {/* 独自レンダラーで表示 */}
+                <SimpleMarkdown text={aiReport} />
+                
                 <div className="mt-6 pt-6 border-t border-gray-100 text-center">
                   <p className="text-xs text-gray-400">※ AIによる生成結果です。内容を参考に、ご自身の言葉でブラッシュアップしてください。</p>
                 </div>
@@ -620,3 +664,5 @@ const App = () => {
     </div>
   );
 };
+
+export default App;
