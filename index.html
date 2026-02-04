@@ -183,22 +183,22 @@ const callGemini = async (prompt) => {
   }
 };
 
-// --- ヘルパー: 改良版SimpleMarkdown ---
-// テキストを行ごとに解析し、見出し・リスト・太字をReact要素としてレンダリングする
+// --- ヘルパー: 改良版SimpleMarkdown (2.0) ---
+// 見出し・リスト・段落をより明確に区別し、視認性を高めるレンダラー
 const SimpleMarkdown = ({ text }) => {
   if (!text) return null;
 
-  // テキストを行で分割
+  // 行ごとに分割
   const lines = text.split('\n');
   const elements = [];
   let listBuffer = [];
 
-  // 太字をパースしてReact要素の配列を返す関数
+  // 太字をパースする関数
   const parseBoldText = (str, keyPrefix) => {
     const parts = str.split(/(\*\*.*?\*\*)/g);
     return parts.map((part, index) => {
       if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={`${keyPrefix}-bold-${index}`} className="text-indigo-900 bg-yellow-100 px-1 rounded">{part.slice(2, -2)}</strong>;
+        return <strong key={`${keyPrefix}-bold-${index}`} className="text-indigo-900 bg-yellow-100 px-1 rounded font-bold">{part.slice(2, -2)}</strong>;
       }
       return part;
     });
@@ -207,75 +207,84 @@ const SimpleMarkdown = ({ text }) => {
   lines.forEach((line, index) => {
     const trimmed = line.trim();
 
-    // 1. リストアイテム (- または *) の場合
+    // 1. リストアイテム
     if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
       listBuffer.push(trimmed.substring(2));
     } else {
-      // リストバッファがあれば、ここで<ul>として書き出し、バッファをクリア
+      // バッファされたリストがあれば出力
       if (listBuffer.length > 0) {
         elements.push(
-          <ul key={`list-group-${index}`} className="list-disc pl-5 space-y-2 text-gray-700 bg-indigo-50/50 p-4 rounded-lg my-3 border border-indigo-100">
-            {listBuffer.map((item, i) => (
-              <li key={`li-${index}-${i}`}>
-                {parseBoldText(item, `li-${index}-${i}`)}
-              </li>
-            ))}
-          </ul>
+          <div key={`list-group-${index}`} className="bg-indigo-50/70 p-5 rounded-xl my-4 border border-indigo-100 shadow-sm">
+            <ul className="list-disc pl-5 space-y-2 text-gray-800">
+              {listBuffer.map((item, i) => (
+                <li key={`li-${index}-${i}`} className="leading-relaxed">
+                  {parseBoldText(item, `li-${index}-${i}`)}
+                </li>
+              ))}
+            </ul>
+          </div>
         );
         listBuffer = [];
       }
 
       // 2. 空行
       if (trimmed === '') {
-        // 余白を追加
         elements.push(<div key={`spacer-${index}`} className="h-2" />);
         return;
       }
 
-      // 3. 見出し (###)
-      if (trimmed.startsWith('###')) {
+      // 3. 見出し (### または ##)
+      if (trimmed.startsWith('#')) {
+        const level = trimmed.match(/^#+/)[0].length;
+        const content = trimmed.replace(/^#+\s*/, '');
+        
         elements.push(
-          <h3 key={`h3-${index}`} className="text-xl font-bold text-indigo-800 mt-6 mb-3 border-b-2 border-indigo-100 pb-1 flex items-center">
-            <span className="text-2xl mr-2 text-indigo-400">#</span>
-            {trimmed.replace(/^###\s*/, '')}
+          <h3 key={`h-${index}`} className={`font-bold text-gray-900 flex items-center ${level <= 2 ? 'text-2xl mt-8 mb-4 border-b-2 border-indigo-200 pb-2' : 'text-xl mt-6 mb-3'}`}>
+            <span className="text-indigo-500 mr-2 opacity-70">
+              {level <= 2 ? <Sparkles size={20} /> : <div className="w-2 h-2 rounded-full bg-indigo-400" />}
+            </span>
+            {content}
           </h3>
         );
         return;
       }
       
-      // 4. 見出し (**) - 単独行で太字のみの場合は見出し扱いにする
-      if (trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length < 50 && !trimmed.includes(' ')) {
+      // 4. 強調見出し (行全体が太字)
+      if (trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length < 60 && !trimmed.includes('  ')) {
          elements.push(
-          <h3 key={`h-bold-${index}`} className="text-lg font-bold text-indigo-800 mt-5 mb-2 pl-3 border-l-4 border-indigo-400 bg-gray-50 py-1">
+          <h4 key={`h-bold-${index}`} className="text-lg font-bold text-indigo-900 mt-6 mb-2 flex items-center">
+            <div className="w-1.5 h-6 bg-indigo-500 rounded mr-3"></div>
             {trimmed.replace(/\*\*/g, '')}
-          </h3>
+          </h4>
         );
         return;
       }
 
       // 5. 通常の段落
       elements.push(
-        <p key={`p-${index}`} className="text-gray-700 leading-relaxed my-1">
+        <p key={`p-${index}`} className="text-gray-700 leading-7 my-2 text-base">
            {parseBoldText(line, `p-${index}`)}
         </p>
       );
     }
   });
 
-  // ループ終了後に残っているリストがあれば書き出し
+  // 残りのリストを出力
   if (listBuffer.length > 0) {
     elements.push(
-      <ul key={`list-group-end`} className="list-disc pl-5 space-y-2 text-gray-700 bg-indigo-50/50 p-4 rounded-lg my-3 border border-indigo-100">
-        {listBuffer.map((item, i) => (
-          <li key={`li-end-${i}`}>
-            {parseBoldText(item, `li-end-${i}`)}
-          </li>
-        ))}
-      </ul>
+      <div key={`list-group-end`} className="bg-indigo-50/70 p-5 rounded-xl my-4 border border-indigo-100 shadow-sm">
+        <ul className="list-disc pl-5 space-y-2 text-gray-800">
+          {listBuffer.map((item, i) => (
+            <li key={`li-end-${i}`} className="leading-relaxed">
+              {parseBoldText(item, `li-end-${i}`)}
+            </li>
+          ))}
+        </ul>
+      </div>
     );
   }
 
-  return <div className="space-y-1 text-left">{elements}</div>;
+  return <div className="w-full text-left">{elements}</div>;
 };
 
 // --- コンポーネント ---
@@ -372,8 +381,7 @@ const App = () => {
     const prompt = `
       あなたはプロのキャリアコンサルタントです。
       以下のユーザー診断結果に基づき、具体的かつ実践的なキャリア戦略レポートを作成してください。
-      口調はポジティブで、プロフェッショナルかつ親しみやすいトーンでお願いします。
-
+      
       【ユーザープロファイル】
       - アーキタイプ: ${typeData.name} (${typeData.desc})
       - 検出されたスキルタグ: ${uniqueSkills.join(', ') || "特になし"}
@@ -381,13 +389,27 @@ const App = () => {
       - 回答の傾向（一部）:
         ${history.slice(0, 5).map(h => `Q: ${h.q} -> A: ${h.a}`).join('\n')}
 
-      【出力してほしい項目】
-      1. **✨ あなたの隠れた可能性**: アーキタイプとスキルを組み合わせた、ユーザー独自の市場価値についての分析。
-      2. **🚀 明日から始めるべきアクション3選**: 転職活動やスキルアップのために、今すぐできる具体的な行動。
-      3. **📝 職務経歴書用「自己PR」ドラフト**: 検出されたスキルを用いた、説得力のある自己PRの例文（200文字程度）。
-      4. **💼 おすすめの意外な職種**: 定番の職種以外で、このタイプが輝けるニッチな、あるいは意外性のある職種提案。
+      【出力ルール】
+      - 以下の4つのセクション構成で出力してください。
+      - 各セクションの見出しは「### 」から始めてください。
+      - 箇条書きは「- 」を使用してください。
+      - テーブルや表は使用しないでください。
+      
+      【セクション1】
+      ### ✨ あなたの隠れた可能性
+      （アーキタイプとスキルを組み合わせた、ユーザー独自の市場価値についての分析）
 
-      出力はマークダウン形式で行ってください。見出しは###を使用してください。
+      【セクション2】
+      ### 🚀 明日から始めるべきアクション3選
+      （転職活動やスキルアップのために、今すぐできる具体的な行動を箇条書きで）
+
+      【セクション3】
+      ### 📝 職務経歴書用「自己PR」ドラフト
+      （検出されたスキルを用いた、説得力のある自己PRの例文。200文字程度）
+
+      【セクション4】
+      ### 💼 おすすめの意外な職種
+      （定番の職種以外で、このタイプが輝けるニッチな、あるいは意外性のある職種提案）
     `;
 
     const result = await callGemini(prompt);
